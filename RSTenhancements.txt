@@ -1,0 +1,108 @@
+Approach 1: Expanding PED Database Schema
+Overview
+This approach involves modifying the existing PromotionExecutionDetails (PED) DynamoDB table to store additional details required for tracking partial cashback issuance in retail scenarios. Since PED currently stores promotions at a high level (promotion-wise), it overwrites reward issuance details when multiple shipments contribute to cashback issuance. By restructuring the schema, we can store detailed reward issuance records without overwriting previous ones.
+
+This requires changes to:
+
+Database Schema: New attributes must be added to PED to support granular reward tracking.
+
+DAO Layer: Since the PED structure changes, all Java services interacting with the database will need updates to their DAO (Data Access Object) layer.
+
+GPED API & Other APIs: Any API consuming PED data will need to be modified to interpret the new schema.
+
+Backfilling Strategy: Existing PED records must be migrated to the new format.
+
+Pros of Approach 1
+✅ Lower Latency – Since all data is stored in a single table, queries are faster as they only involve a single DynamoDB lookup instead of multiple calls across different databases. This reduces API response times.
+
+✅ Simple Querying – Fetching data remains simple because all required fields exist within PED, avoiding the need for joins across multiple data sources. Queries remain optimized, and filtering or searching within a single table is efficient.
+
+✅ Easier to Cache at DB Level – With all data in one place, read-heavy queries can be optimized using DynamoDB’s built-in caching solutions like DAX (DynamoDB Accelerator).
+
+✅ Reduced Network Bandwidth Usage – Since data is pre-aggregated in a single location, requests don’t need to fetch data from multiple sources, reducing API call overhead and network latency.
+
+Cons of Approach 1
+⚠️ Schema Changes Require Service-Wide Updates – Since the structure of PED is modified, all existing APIs, services, and consumers using PED need to be updated. This increases development effort and potential regression issues.
+
+⚠️ Backfilling Overhead – All historical records must be migrated to the new schema, requiring a data backfill strategy. This increases risk since incorrect migration could lead to data loss or inconsistencies.
+
+⚠️ Data Overwrites Still Possible – Even with schema improvements, if updates are not properly designed, previous issuance records may still get overridden, leading to data integrity issues.
+
+⚠️ Storage Limitations in DynamoDB – Each record in DynamoDB has a 400 KB limit. Storing detailed per-shipment cashback data might cause some promotions to exceed this limit, making the solution unsustainable.
+
+⚠️ Less Scalability – The PED table would grow significantly in size, and since DynamoDB costs scale with storage and read/write units, this could increase costs compared to a distributed database design.
+
+⚠️ Query Performance Degradation Over Time – As data size increases, indexes may become inefficient, leading to higher read costs and slower lookups.
+
+Mitigation Strategies for Approach 1
+Compression to Reduce Storage Impact: Data can be compressed before storing it in PED (e.g., Gzip or Brotli compression). However, this introduces another issue—compressed data cannot be queried directly, requiring decompression before reading, which increases latency.
+
+API Versioning for Backward Compatibility: Since this approach requires changes to PED’s data structure, API versioning (query parameter versioning) can ensure existing consumers continue using v1, while the updated API supports v2 with the new schema.
+
+Backfilling with Progressive Migration: Instead of bulk updates, incrementally migrate old records to the new schema to avoid downtime and unexpected failures.
+
+Approach 2: Aggregating Data from Multiple Databases
+Overview
+Instead of modifying PED, this approach aggregates data from multiple existing databases, including LineItemsBenefitTracker (which stores item-level cashback issuance data). The GetPromotionExecutionDetails (GPED) API would be updated to fetch data dynamically from multiple sources.
+
+This requires changes to:
+
+GPED API Request/Response Model: Since data now comes from multiple databases, the API must be updated to include new response fields.
+
+Parallel Data Fetching: Queries must retrieve data from PED, LineItemsBenefitTracker, and potentially other sources in parallel.
+
+Caching Strategy: Since fetching from multiple sources increases latency, caching must be implemented strategically.
+
+Fallback Mechanisms: If one data source is temporarily unavailable, the system should return partial results instead of failing entirely.
+
+Pros of Approach 2
+✅ No Schema Changes to PED – Since the database structure remains untouched, existing APIs depending on PED remain functional, reducing migration risks.
+
+✅ Better Data Integrity – Since each source owns its own data, there is no risk of overwriting previously issued cashback records, ensuring more accurate tracking.
+
+✅ Scalability & Flexibility – The system can dynamically query relevant data sources, making it future-proof for additional use cases. If new cashback issuance sources arise, they can be integrated without modifying existing schemas.
+
+✅ Distributed Storage Reduces DynamoDB Size Limits – Since PED is no longer the sole storage for cashback issuance records, DynamoDB’s 400 KB record limit is no longer a bottleneck.
+
+✅ Supports API Versioning Smoothly – A new v2 API can be introduced while maintaining v1 for backward compatibility, ensuring that existing services remain unaffected.
+
+✅ Optimized Querying with Caching – Since some data (like eligibility results) is frequently accessed, caching can minimize redundant queries to multiple databases.
+
+Cons of Approach 2
+⚠️ Higher Latency Due to Multiple Queries – Since data is fetched from multiple sources, the response time is slightly higher than a single-table lookup.
+
+⚠️ Increased Network Bandwidth Usage – More data flows between services, increasing network costs, especially if multiple calls are required for a single request.
+
+⚠️ Complex Implementation – This approach requires implementing:
+
+Parallel fetching mechanisms to gather data efficiently.
+
+Caching layers to reduce redundant queries.
+
+Fallback mechanisms in case any data source fails.
+
+Mitigation Strategies for Approach 2
+Parallel Fetching with Aggregation Timeout – Implement async calls with a response aggregator to ensure all data sources return before sending the final API response.
+
+Selective Caching to Reduce Latency – Frequently queried data should be cached at the API gateway or database level to reduce redundant fetch operations.
+
+Fallback Mechanisms to Handle Failures – If a data source (e.g., LineItemsBenefitTracker) is unavailable, the API can return partial results from PED instead of failing completely.
+
+Final Recommendation: Approach 2 (Multiple DB Aggregation)
+🚀 Why Approach 2 is Better:
+
+Ensures data accuracy (no overwrites)
+
+More scalable and future-proof
+
+No need to modify PED schema (avoiding disruptions to existing services)
+
+Backward compatibility is easier with API versioning
+
+⚠️ Trade-Offs:
+
+Slightly higher latency (mitigated with caching and parallel fetching)
+
+Increased network calls (optimized using selective querying)
+
+Given that our team owns all the databases, Approach 2 provides the most flexibility while ensuring data integrity.
