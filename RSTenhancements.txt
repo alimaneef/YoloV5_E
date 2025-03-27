@@ -106,3 +106,47 @@ Slightly higher latency (mitigated with caching and parallel fetching)
 Increased network calls (optimized using selective querying)
 
 Given that our team owns all the databases, Approach 2 provides the most flexibility while ensuring data integrity.
+
+
+If a new cashback issuance system is introduced later, it can simply be integrated as another data source without impacting PED or breaking existing APIs.
+One of the biggest downsides of Approach 1 is that schema changes in PED introduce long-term rigidity. Any future modification to cashback tracking would require further schema redesigns, backfilling, and API migrations, making iterative improvements time-consuming and high-risk
+In contrast, Approach 2 is modular—new data sources can be added without modifying existing storage structures.
+With versioning, older clients continue using v1, while new clients gradually migrate to v2 at their own pace.
+v1 (Minimal Data) → Ideal for teams that only need top-level promotion execution details.
+v2 (Enhanced Data) → Fetches detailed issuance history from multiple DBs.
+
+***************************************************************
+Issue with LastUpdatedTime in PED Queries
+Currently, the Rewards Support Tool queries Promotion Execution Details (PED) using either:
+
+BusinessReferenceId, or
+
+CustomerId with a time-based filter (e.g., transactions within a specific period).
+
+However, PED only stores lastUpdatedTime, which creates a problem in scenarios where multiple rewards are associated with a transaction.
+
+Problem Scenario
+Consider a transaction where a customer receives three benefits:
+
+One instant cashback
+
+Two scratch cards
+
+Each time the customer redeems a scratch card, the PED record updates, modifying the lastUpdatedTime.
+
+For example:
+
+The customer scratches the first scratch card at 9 AM today → lastUpdatedTime updates to 9 AM today.
+
+The customer scratches the second scratch card the next day → lastUpdatedTime updates to the next day.
+
+Now, if a support agent queries using customerId and transactionTime within a short time range, including only the transaction timestamp, the tool fails to retrieve the record because the lastUpdatedTime has moved forward (due to the scratch card redemption).
+
+Proposed Solution
+Instead of relying on lastUpdatedTime, the PED database should store:
+
+Reward Creation / Reserve Time – The time when the reward (cashback or scratch card) was initially issued.
+
+Issuance Time – The time when the reward was actually processed and granted to the customer.
+
+By querying based on creation/reserve time rather than lastUpdatedTime, the support tool can correctly retrieve all rewards associated with a transaction, even if their statuses were updated later.
