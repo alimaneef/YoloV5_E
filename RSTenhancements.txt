@@ -150,3 +150,41 @@ Reward Creation / Reserve Time – The time when the reward (cashback or scratch
 Issuance Time – The time when the reward was actually processed and granted to the customer.
 
 By querying based on creation/reserve time rather than lastUpdatedTime, the support tool can correctly retrieve all rewards associated with a transaction, even if their statuses were updated later.
+
+###################################################
+Issue with GC ID Overwrites in PED for Retail Events
+For retail promotions, cashback is issued incrementally across multiple shipments. Consider a ₹100 cashback promotion where a customer purchases 5 items:
+
+₹15 cashback is issued after the first order’s shipment.
+
+₹21 cashback is issued after the second order’s shipment, and so on.
+
+Each cashback issuance generates a concession event, which updates PED with:
+
+benefitIssuanceStatus
+
+benefitIssuanceTime
+
+GC ID (Gift Card ID)
+
+Problem
+Since PED stores data at the promotion level, each update overwrites the previous GC ID and issuance details, causing loss of past GC records.
+
+Solution
+PED should retain all issued GC IDs instead of overwriting them. Possible approaches:
+
+Store GC IDs as a list/array to track multiple issuances or store them as a Delimited string in PED
+
+##########################
+Enhancing Cashback Visibility in the Support Tool
+Current Limitation
+The support tool currently displays only the total benefit value of a promotion, without reflecting cashback issued in installments or splits. This can cause confusion for support agents, as they cannot see how much cashback has been issued at different stages of the fulfillment process.
+
+Proposed Improvement
+Introduce a dynamically updating field that aggregates cashback issued from Concessions DB in real-time. This will ensure that the support tool reflects:
+
+The total eligible benefit under the promotion.
+
+The amount already granted in past installments.
+
+The remaining cashback yet to be issued, if applicable.
