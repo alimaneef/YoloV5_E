@@ -188,3 +188,21 @@ The total eligible benefit under the promotion.
 The amount already granted in past installments.
 
 The remaining cashback yet to be issued, if applicable.
+###################################
+
+AI-Powered Query Resolution
+Planned Integration
+We aim to integrate an AI agent to assist in resolving customer queries more efficiently. This agent will:
+
+Provide faster query resolution for customer support agents.
+
+Potentially be extended for direct customer use in the future, with security guardrails in place to restrict sensitive information access.
+
+How It Works
+The AI agent will leverage the same API that powers the Rewards Support Tool front end, ensuring consistency in data retrieval. By intelligently gathering relevant information, it will enable:
+
+Quicker issue resolution for support teams.
+
+Scalable customer assistance, reducing manual intervention.
+
+Secure and controlled responses, aligning with compliance and data protection standards.
