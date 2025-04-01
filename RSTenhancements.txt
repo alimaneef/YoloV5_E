@@ -206,3 +206,60 @@ Quicker issue resolution for support teams.
 Scalable customer assistance, reducing manual intervention.
 
 Secure and controlled responses, aligning with compliance and data protection standards.
+
+
+#######*******************************************###########################
+Why approach 2 is recommended
+Why Approach 1 (Schema Change in PED) is Not Ideal
+Schema Complexity Increases:
+
+Adding fields like multiple GC IDs, reward issuance timestamps, and partial cashback amounts makes the schema harder to manage.
+
+Querying and updating records becomes more complicated.
+
+High Migration and Backfilling Effort:
+
+The PED table already stores a large volume of records. Modifying the schema means we need to update existing records, which can be time-consuming and error-prone.
+
+Any incorrect migration can cause data inconsistency issues.
+
+Backward Compatibility Issues:
+
+Any changes in PED’s schema require updates to all APIs and services that read/write data to PED, including the concession_to_ped lambda.
+
+Other teams or services depending on PED might break if they are not updated.
+
+Performance Impact on PED:
+
+Storing multiple values (GC IDs, issuance details, etc.) in arrays increases write complexity. Every time a cashback is issued, PED must update a larger record instead of just a single field, leading to higher write costs and potential performance issues.
+
+Why Approach 2 (Fetching from Multiple DBs) is Better
+More Flexible & Scalable
+
+We don’t need to change PED’s schema, avoiding any risk to existing services.
+
+Each database remains optimized for its specific role—Concessions DB handles cashback issuance, PED handles promotion details.
+
+Backward Compatibility is Maintained
+
+The existing GPED API can continue working as v1, while we introduce v2 to fetch data from multiple sources.
+
+In case of failures or issues in v2, we can fall back to v1 without breaking the system.
+
+Better Data Consistency
+
+Instead of relying on a single database (PED) to store everything, we query each database at the time of request to get the most up-to-date data.
+
+This prevents stale or overwritten records.
+
+Lower Risk & Easier Implementation
+
+No need for schema migration or large-scale backfilling.
+
+The implementation only requires changes to the API logic, not the storage structure.
+
+Better Debugging & Failure Handling
+
+If v2 fails due to a data issue, we can switch back to v1 by simply using the older API request format.
+
+If we modified the PED schema (Approach 1), rolling back would be much harder because the structure would already have changed.
